@@ -18,8 +18,8 @@ from django.contrib import admin
 from django.urls import include, path
 from rest_framework import permissions
 from rest_framework.routers import DefaultRouter
-from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
+from drf_yasg.views import get_schema_view
 
 from todo.views import (CustomTokenObtainPairView, CustomTokenRefreshView,
                          RegisterView, TaskListDetailView, TaskListListCreateView,
@@ -36,7 +36,6 @@ schema_view = get_schema_view(
 )
 
 router = DefaultRouter()
-router.register(r'task-lists/(?P<task_list_id>[^/.]+)/tasks', TaskViewSet, basename='task-task')
 router.register(r'tasks', TaskViewSet, basename='task')
 
 urlpatterns = [
@@ -46,6 +45,8 @@ urlpatterns = [
     path('api/token/refresh/', CustomTokenRefreshView.as_view(), name='token_refresh'),
     path('api/task-lists/', TaskListListCreateView.as_view(), name='task-list-list-create'),
     path('api/task-lists/<int:pk>/', TaskListDetailView.as_view(), name='task-list-detail'),
+    path('api/task-lists/<int:task_list_id>/tasks/', TaskViewSet.as_view({'get': 'list', 'post': 'create'}), name='task-list-task-list'),
+    path('api/task-lists/<int:task_list_id>/tasks/<int:pk>/', TaskViewSet.as_view({'get': 'retrieve', 'put': 'update', 'patch': 'partial_update', 'delete': 'destroy'}), name='task-list-task-detail'),
     path('api/', include(router.urls)),
     path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
     path('redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),

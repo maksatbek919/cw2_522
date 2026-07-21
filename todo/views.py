@@ -1,9 +1,10 @@
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_yasg.utils import swagger_auto_schema
-from rest_framework import filters, generics, mixins, viewsets
+from rest_framework import filters, generics, mixins, serializers, status, viewsets
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 from .models import Task, TaskList
@@ -21,13 +22,18 @@ class RegisterView(generics.GenericAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
+
+        refresh = RefreshToken.for_user(user)
+
         return Response({
             'user': {
                 'id': user.id,
                 'username': user.username,
                 'email': user.email,
-            }
-        }, status=201)
+            },
+            'refresh': str(refresh),
+            'access': str(refresh.access_token),
+        }, status=status.HTTP_201_CREATED)
 
 
 class TaskListListCreateView(generics.GenericAPIView,
@@ -60,7 +66,12 @@ class TaskListDetailView(generics.GenericAPIView,
     permission_classes = [IsAuthenticated, IsOwner]
 
     def get_queryset(self):
-        return TaskList.objects.filter(owner=self.request.user)
+        return TaskList.objects.all()
+
+    def get_object(self):
+        obj = get_object_or_404(TaskList, pk=self.kwargs['pk'])
+        self.check_object_permissions(self.request, obj)
+        return obj
 
     @swagger_auto_schema(operation_description='Retrieve a specific task list')
     def get(self, request, *args, **kwargs):
@@ -95,13 +106,18 @@ class TaskViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(task_list_id=task_list_id)
         return queryset
 
+    def get_object(self):
+        obj = get_object_or_404(Task, pk=self.kwargs['pk'])
+        self.check_object_permissions(self.request, obj)
+        return obj
+
     def perform_create(self, serializer):
-        task_list_id = self.kwargs.get('task_list_id')
-        if task_list_id:
-            task_list = get_object_or_404(TaskList, pk=task_list_id, owner=self.request.user)
-            serializer.save(task_list=task_list)
-        else:
-            serializer.save()
+        task_list_id = self.kwargs.get('task_list_id') or self.request.data.get('task_list')
+        if not task_list_id:
+            raise serializers.ValidationError({'task_list': 'This field is required.'})
+
+        task_list = get_object_or_404(TaskList, pk=task_list_id, owner=self.request.user)
+        serializer.save(task_list=task_list)
 
 
 class CustomTokenObtainPairView(TokenObtainPairView):
